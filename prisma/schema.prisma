@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String              @id @default(cuid())
+  email        String              @unique
+  name         String
+  passwordHash String
+  cash         Decimal             @default(1000000)
+  createdAt    DateTime            @default(now())
+  sessions     Session[]
+  positions    Position[]
+  orders       Order[]
+  watchlist    WatchlistItem[]
+  snapshots    PortfolioSnapshot[]
+  simulations  Simulation[]
+}
+
+model Session {
+  id           String      @id
+  userId       String
+  expiresAt    DateTime
+  /// Set while this login is in simulation mode; null means live trading.
+  simulationId String?
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  simulation   Simulation? @relation(fields: [simulationId], references: [id], onDelete: SetNull)
+}
+
+model Position {
+  id       String  @id @default(cuid())
+  userId   String
+  symbol   String
+  quantity Decimal
+  avgCost  Decimal
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+}
+
+model Order {
+  id          String    @id @default(cuid())
+  userId      String
+  symbol      String
+  side        String // BUY | SELL
+  type        String // MARKET | LIMIT
+  quantity    Decimal
+  limitPrice  Decimal?
+  status      String // FILLED | PENDING | CANCELED | REJECTED
+  fillPrice   Decimal?
+  reason      String?
+  createdAt   DateTime  @default(now())
+  filledAt    DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, symbol])
+  @@index([userId, createdAt])
+}
+
+model WatchlistItem {
+  id      String   @id @default(cuid())
+  userId  String
+  symbol  String
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+}
+
+model PortfolioSnapshot {
+  id         String   @id @default(cuid())
+  userId     String
+  totalValue Decimal
+  timestamp  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+}
+
+/// A "start 3 months ago" run: the user trades one $20k slice, Gemini trades 49 others.
+model Simulation {
+  id         String    @id @default(cuid())
+  userId     String
+  /// The trading day the simulation is frozen at (00:00 UTC of that date).
+  startDate  DateTime
+  /// The trading day positions are valued at. Null: the latest price when the user reveals.
+  endDate    DateTime?
+  status     String // PREPARING | RUNNING | READY | REVEALED | FAILED
+  /// As-of snapshot of the stock universe Gemini chooses from.
+  universe   Json?
+  /// What Gemini was given: 1 = prices, returns, P/E, beta; 2 = also headlines and technical/candlestick
+  /// data; 3 = the most informative articles with summaries instead of the latest headlines.
+  dataVersion Int      @default(1)
+  error      String?
+  createdAt  DateTime  @default(now())
+  revealedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paths      SimPath[]
+  sessions   Session[]
+
+  @@index([userId, createdAt])
+}
+
+model SimPath {
+  id           String       @id @default(cuid())
+  simulationId String
+  kind         String // USER | GEMINI | RANDOM | RULE | BENCHMARK
+  runIndex     Int
+  cash         Decimal
+  reasoning    String?
+  /// The Gemini model that made this decision.
+  model        String?
+  /// For RULE paths, which rule (see src/server/simRules.ts).
+  strategy     String?
+  error        String?
+  decidedAt    DateTime?
+  finalValue   Decimal?
+  simulation   Simulation   @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  holdings     SimHolding[]
+  trades       SimTrade[]
+
+  @@unique([simulationId, kind, runIndex])
+}
+
+model SimHolding {
+  id        String   @id @default(cuid())
+  pathId    String
+  symbol    String
+  shares    Decimal
+  /// Average entry price at the start date.
+  avgCost   Decimal
+  exitPrice Decimal?
+  path      SimPath  @relation(fields: [pathId], references: [id], onDelete: Cascade)
+
+  @@unique([pathId, symbol])
+}
+
+/// The user's manual trades inside a simulation, all filled at the start date's close.
+model SimTrade {
+  id        String   @id @default(cuid())
+  pathId    String
+  symbol    String
+  side      String // BUY | SELL
+  shares    Decimal
+  price     Decimal
+  createdAt DateTime @default(now())
+  path      SimPath  @relation(fields: [pathId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #000000;
+  --color-surface: #111315;
+  --color-elevated: #1e2124;
+  --color-line: #2a2e33;
+  --color-fg: #ffffff;
+  --color-muted: #9aa0a6;
+  --color-up: #00c805;
+  --color-down: #ff5000;
+  --color-sim: #9575f7;
+  --color-rand: #2fa4a9;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  /* Pages set this to up or down to tint buttons and tabs the way Robinhood does. */
+  --accent: var(--color-up);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-feature-settings: "tnum";
+}
+
+.accent-text {
+  color: var(--accent);
+}
+.accent-bg {
+  background: var(--accent);
+}
+.accent-border {
+  border-color: var(--accent);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
